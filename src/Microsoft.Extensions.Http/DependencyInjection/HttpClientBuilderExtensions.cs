@@ -3,6 +3,7 @@
 
 using System;
 using System.Net.Http;
+using System.Reflection;
 using System.Threading;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Options;
@@ -316,21 +317,7 @@ namespace Microsoft.Extensions.DependencyInjection
         public static IHttpClientBuilder AddTypedClient<TClient>(this IHttpClientBuilder builder)
             where TClient : class
         {
-            if (builder == null)
-            {
-                throw new ArgumentNullException(nameof(builder));
-            }
-
-            builder.Services.AddTransient<TClient>(s =>
-            {
-                var httpClientFactory = s.GetRequiredService<IHttpClientFactory>();
-                var httpClient = httpClientFactory.CreateClient(builder.Name);
-
-                var typedClientFactory = s.GetRequiredService<ITypedHttpClientFactory<TClient>>();
-                return typedClientFactory.CreateClient(httpClient);
-            });
-
-            return builder;
+            return builder.AddTypedClient<TClient, TClient>();
         }
 
         /// <summary>
@@ -373,16 +360,52 @@ namespace Microsoft.Extensions.DependencyInjection
                 throw new ArgumentNullException(nameof(builder));
             }
 
-            builder.Services.AddTransient<TClient>(s =>
+            foreach (var declaredConstructor in typeof(TImplementation).GetTypeInfo().DeclaredConstructors)
             {
-                var httpClientFactory = s.GetRequiredService<IHttpClientFactory>();
-                var httpClient = httpClientFactory.CreateClient(builder.Name);
+                if (!declaredConstructor.IsStatic && declaredConstructor.IsPublic)
+                {
+                    foreach (var parameterInfo in declaredConstructor.GetParameters())
+                    {
+                        if (parameterInfo.ParameterType == typeof(HttpMessageHandler))
+                        {
+                            builder.Services.AddTransient<TClient>(s =>
+                            {
+                                var httpMessageHandlerFactory = s.GetRequiredService<IHttpMessageHandlerFactory>();
+                                var httpMessageHandler = httpMessageHandlerFactory.CreateHandler(builder.Name);
 
-                var typedClientFactory = s.GetRequiredService<ITypedHttpClientFactory<TImplementation>>();
-                return typedClientFactory.CreateClient(httpClient);
-            });
+                                var typedClientFactory = s.GetRequiredService<ITypedHttpClientFactory<TImplementation>>();
+                                var typedClient = typedClientFactory.CreateClient(httpMessageHandler);
+                                if (typedClient is HttpClient httpClient)
+                                {
+                                    var optionsMonitor = s.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>();
+                                    var options = optionsMonitor.Get(builder.Name);
+                                    for (var i = 0; i < options.HttpClientActions.Count; i++)
+                                    {
+                                        options.HttpClientActions[i](httpClient);
+                                    }
+                                }
+                                return typedClient;
+                            });
+                            return builder;
+                        }
 
-            return builder;
+                        if (parameterInfo.ParameterType == typeof(HttpClient))
+                        {
+                            builder.Services.AddTransient<TClient>(s =>
+                            {
+                                var httpClientFactory = s.GetRequiredService<IHttpClientFactory>();
+                                var httpClient = httpClientFactory.CreateClient(builder.Name);
+
+                                var typedClientFactory = s.GetRequiredService<ITypedHttpClientFactory<TImplementation>>();
+                                return typedClientFactory.CreateClient(httpClient);
+                            });
+                            return builder;
+                        }
+                    }
+                }
+            }
+
+            throw new Exception($"No compatible constructors we found for {typeof(TImplementation).Name}.");
         }
 
         /// <summary>

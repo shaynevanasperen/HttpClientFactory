@@ -107,5 +107,15 @@ namespace Microsoft.Extensions.Http
         /// </param>
         /// <returns>An instance of <typeparamref name="TClient"/>.</returns>
         TClient CreateClient(HttpClient httpClient);
+
+        /// <summary>
+        /// Creates a typed client given an associated <see cref="HttpMessageHandler"/>.
+        /// </summary>
+        /// <param name="httpMessageHandler">
+        /// An <see cref="HttpMessageHandler"/> created by the <see cref="IHttpMessageHandlerFactory"/> for the named client
+        /// associated with <typeparamref name="TClient"/>.
+        /// </param>
+        /// <returns>An instance of <typeparamref name="TClient"/>.</returns>
+        TClient CreateClient(HttpMessageHandler httpMessageHandler);
     }
 }

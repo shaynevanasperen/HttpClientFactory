@@ -31,6 +31,9 @@ namespace HttpClientFactorySample
 
             var services = serviceCollection.BuildServiceProvider();
 
+            var rawGitHub = services.GetRequiredService<RawGitHubClient>();
+            var response1 = await rawGitHub.GetAsync("/");
+
             Console.WriteLine("Creating a client...");
             var github = services.GetRequiredService<GitHubClient>();
 
@@ -54,6 +57,8 @@ namespace HttpClientFactorySample
 
             registry.Add("regular", timeout);
             registry.Add("long", longTimeout);
+
+            services.AddHttpClient<RawGitHubClient>().ConfigureHttpClient(x => x.BaseAddress = new Uri("https://api.github.com/"));
 
             services.AddHttpClient("github", c =>
             {
@@ -109,6 +114,15 @@ namespace HttpClientFactorySample
                 response.EnsureSuccessStatusCode();
 
                 return response;
+            }
+        }
+
+        private class RawGitHubClient : HttpClient
+        {
+            public RawGitHubClient(HttpMessageHandler handler) : base(handler, false)
+            {
+                DefaultRequestHeaders.Add("Accept", "application/vnd.github.v3+json"); // GitHub API versioning
+                DefaultRequestHeaders.Add("User-Agent", "HttpClientFactory-Sample"); // GitHub requires a user-agent
             }
         }
 

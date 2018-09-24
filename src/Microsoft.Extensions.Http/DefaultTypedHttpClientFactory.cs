@@ -36,7 +36,17 @@ namespace Microsoft.Extensions.Http
                 throw new ArgumentNullException(nameof(httpClient));
             }
 
-            return (TClient)_cache.Activator(_services, new object[] { httpClient });
+            return (TClient)_cache.HttpClientActivator(_services, new object[] { httpClient });
+        }
+
+        public TClient CreateClient(HttpMessageHandler httpMessageHandler)
+        {
+            if (httpMessageHandler == null)
+            {
+                throw new ArgumentNullException(nameof(httpMessageHandler));
+            }
+
+            return (TClient)_cache.HttpMessageHandlerActivator(_services, new object[] { httpMessageHandler });
         }
 
         // The Cache should be registered as a singleton, so it that it can
@@ -44,17 +54,28 @@ namespace Microsoft.Extensions.Http
         // as a transient, so that it doesn't close over the application root service provider.
         public class Cache
         {
-            private readonly static Func<ObjectFactory> _createActivator = () => ActivatorUtilities.CreateFactory(typeof(TClient), new Type[] { typeof(HttpClient), });
+            private readonly static Func<ObjectFactory> _createHttpClientActivator = () => ActivatorUtilities.CreateFactory(typeof(TClient), new Type[] { typeof(HttpClient) });
+            private readonly static Func<ObjectFactory> _createHttpMessageHandlerActivator = () => ActivatorUtilities.CreateFactory(typeof(TClient), new Type[] { typeof(HttpMessageHandler) });
 
-            private ObjectFactory _activator;
-            private bool _initialized;
-            private object _lock;
+            private ObjectFactory _httpClientActivator;
+            private bool _httpClientInitialized;
+            private object _httpClientLock;
 
-            public ObjectFactory Activator => LazyInitializer.EnsureInitialized(
-                ref _activator, 
-                ref _initialized, 
-                ref _lock, 
-                _createActivator);
+            public ObjectFactory HttpClientActivator => LazyInitializer.EnsureInitialized(
+                ref _httpClientActivator, 
+                ref _httpClientInitialized, 
+                ref _httpClientLock, 
+                _createHttpClientActivator);
+
+            private ObjectFactory _httpMessageHandlerActivator;
+            private bool _httpMessageHandlerInitialized;
+            private object _httpMessageHandlerLock;
+
+            public ObjectFactory HttpMessageHandlerActivator => LazyInitializer.EnsureInitialized(
+                ref _httpMessageHandlerActivator, 
+                ref _httpMessageHandlerInitialized, 
+                ref _httpMessageHandlerLock, 
+                _createHttpMessageHandlerActivator);
         }
     }
 }
